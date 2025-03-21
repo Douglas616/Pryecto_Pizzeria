@@ -85,7 +85,20 @@ def menu():
         if opcion == "1":
             print("Complete los siguientes campos")
             cliente = input("\n👤 Nombre del cliente: ")
-            cantidad = int(input("Cantidad de pizzas: "))
+
+
+            while True:
+                try:
+                    cantidad = int(input("🍕Cantidad de pizzas:"))
+                    if cantidad > 0:
+                        break
+                    else:
+                        
+                        print("Ingresa un número mayor a 0")
+                except ValueError:    
+                        print("Opción inválida. Ingrese un numero entero")
+        
+            
             print("\n📜 Ingredientes disponibles:")
             for i, ing in enumerate(ingredientes_disponibles, 1):
                 print(f"{i}. {ing}")
