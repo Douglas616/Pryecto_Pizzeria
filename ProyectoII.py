@@ -45,7 +45,7 @@ class Terreno:
             actual = padre[actual]
         camino.append((inicio_x, inicio_y))
         camino.reverse()
-        return camino
+        return camino, distancias[(fin_x, fin_y)]
 
 def generar_dot_matriz_con_camino(terreno, camino):
     n = terreno.filas
@@ -53,12 +53,11 @@ def generar_dot_matriz_con_camino(terreno, camino):
 
     dot = []
     dot.append("graph G {")
-    dot.append("    node [shape=ellipse, width=1.5, height=0.7, fixedsize=true, style=filled, fillcolor=orange];")
-    dot.append("    splines=false;")
-    dot.append("    nodesep=0.5;")
-    dot.append("    ranksep=0.5;")
+    dot.append("     node [shape=ellipse, width=1.5, height=0.7, fixedsize=true, style=filled, fillcolor=orange];")
+    dot.append("     splines=false;")
+    dot.append("     nodesep=0.5;")
+    dot.append("     ranksep=0.5;")
 
-    # Crear nodos con colores específicos
     for i in range(n):
         fila_dot = []
         for j in range(m):
@@ -74,24 +73,21 @@ def generar_dot_matriz_con_camino(terreno, camino):
                 estilo = ''
             nodo = f'{pos} [label="{valor}" {"," + estilo if estilo else ""}]'
             fila_dot.append(pos)
-            dot.append(f'    {nodo};')
-        dot.append("    { rank=same; " + "; ".join(fila_dot) + " }")
+            dot.append(f'     {nodo};')
+        dot.append("     { rank=same; " + "; ".join(fila_dot) + " }")
 
-    # Conexiones horizontales
     for i in range(1, n + 1):
         for j in range(1, m):
-            dot.append(f'    "{i},{j}" -- "{i},{j+1}";')
+            dot.append(f'     "{i},{j}" -- "{i},{j+1}";')
 
-    # Conexiones verticales
     for i in range(1, n):
         for j in range(1, m + 1):
-            dot.append(f'    "{i},{j}" -- "{i+1},{j}";')
+            dot.append(f'     "{i},{j}" -- "{i+1},{j}";')
 
-    # Dibujar la ruta óptima como una línea resaltada
     for k in range(len(camino) - 1):
         i1, j1 = camino[k]
         i2, j2 = camino[k + 1]
-        dot.append(f'    "{i1+1},{j1+1}" -- "{i2+1},{j2+1}" [color=blue, penwidth=2.5];')
+        dot.append(f'     "{i1+1},{j1+1}" -- "{i2+1},{j2+1}" [color=blue, penwidth=2.5];')
 
     dot.append("}")
 
@@ -116,6 +112,8 @@ def generar_dot_matriz_con_camino(terreno, camino):
 class GestorTerrenos:
     def __init__(self):
         self.terrenos = []
+        self.ruta_guardado_xml = "./salida_xml/" # Ruta por defecto para guardar los XML
+        os.makedirs(self.ruta_guardado_xml, exist_ok=True)
 
     def cargar_xml(self, archivo):
         tree = ET.parse(archivo)
@@ -140,6 +138,54 @@ class GestorTerrenos:
 
     def obtener_terreno(self, indice):
         return self.terrenos[indice]
+
+       
+    def generar_archivo_salida_xml(self, indice_terreno, nombre_archivo, ruta_optima, combustible_total):
+        if 0 <= indice_terreno < len(self.terrenos):
+            terreno = self.terrenos[indice_terreno]
+            ruta_archivo = os.path.join(self.ruta_guardado_xml, f"{nombre_archivo}.xml")
+
+            raiz = ET.Element("terreno")
+            raiz.set("nombre", terreno.nombre)
+
+            pos_ini = ET.SubElement(raiz, "posicioninicio")
+            ET.SubElement(pos_ini, "x").text = str(terreno.inicio[0] + 1)
+            ET.SubElement(pos_ini, "y").text = str(terreno.inicio[1] + 1)
+
+            pos_fin = ET.SubElement(raiz, "posicionfin")
+            ET.SubElement(pos_fin, "x").text = str(terreno.fin[0] + 1)
+            ET.SubElement(pos_fin, "y").text = str(terreno.fin[1] + 1)
+
+            combustible = ET.SubElement(raiz, "combustible")
+            combustible.text = str(combustible_total)
+
+            for x, y in ruta_optima:
+                posicion = ET.SubElement(raiz, "posicion")
+                posicion.set("x", str(x + 1))
+                posicion.set("y", str(y + 1))
+                posicion.text = str(terreno.matriz[x][y])
+
+            arbol = ET.ElementTree(raiz)
+            ET.indent(arbol, space="  ", level=0)
+
+            try:
+                arbol.write(ruta_archivo, encoding="UTF-8", xml_declaration=True)
+                print(f"Archivo XML de salida generado exitosamente en: {ruta_archivo}")
+
+                if os.name == 'nt':
+                    try:
+                        subprocess.run(["notepad.exe", ruta_archivo], check=True)
+                    except FileNotFoundError:
+                        print("No se encontró 'notepad.exe'.")
+                elif os.name == 'posix':
+                    try:
+                        subprocess.run(["xdg-open", ruta_archivo], check=True)
+                    except FileNotFoundError:
+                        print("No se encontró un visor de texto predeterminado.")
+            except Exception as e:
+                print(f"Error al escribir el archivo XML: {e}")
+        else:
+            print("Índice de terreno no válido.")
 
 def menu():
     gestor = GestorTerrenos()
@@ -166,26 +212,45 @@ def menu():
             gestor.mostrar_terrenos()
         elif opcion == "3":
             gestor.mostrar_terrenos()
-            indice = int(input("Seleccione el número de terreno: ")) - 1
-            terreno = gestor.obtener_terreno(indice)
-            camino = terreno.encontrar_ruta_optima()
-            generar_dot_matriz_con_camino(terreno, camino)
-            print("Ruta óptima generada y graficada en PDF.")
+            try:
+                indice = int(input("Seleccione el número de terreno: ")) - 1
+                terreno = gestor.obtener_terreno(indice)
+                camino, combustible = terreno.encontrar_ruta_optima()
+                generar_dot_matriz_con_camino(terreno, camino)
+                print("Ruta óptima generada y graficada en PDF.")
+            except ValueError:
+                print("Por favor, ingrese un número válido.")
+            except IndexError:
+                print("Número de terreno no válido.")
         elif opcion == "4":
-           
-         
-            print("Ruta óptima generada y graficada como tabla.")
+            gestor.mostrar_terrenos()
+            try:
+                indice_terreno = int(input("Seleccione el número de terreno para generar el archivo XML: ")) - 1
+                if 0 <= indice_terreno < len(gestor.terrenos):
+                    nombre_archivo = input("Ingrese el nombre para el archivo XML de salida (sin extensión): ")
+                    terreno = gestor.obtener_terreno(indice_terreno)
+                    camino, combustible = terreno.encontrar_ruta_optima()
+                    gestor.generar_archivo_salida_xml(indice_terreno, nombre_archivo, camino, combustible)
+                else:
+                    print("Número de terreno no válido.")
+            except ValueError:
+                print("Por favor, ingrese un número válido.")
         elif opcion == "5":
             gestor.mostrar_terrenos()
-            indice = int(input("Seleccione el número de terreno: ")) - 1
-            terreno = gestor.obtener_terreno(indice)
-            camino = terreno.encontrar_ruta_optima()
-            matriz_visual = [['o' for _ in range(terreno.columnas)] for _ in range(terreno.filas)]
-            for i, j in camino:
-                matriz_visual[i][j] = '1'
-            print("\nMapa del Camino (1 indica el recorrido):")
-            for fila in matriz_visual:
-                print(fila)
+            try:
+                indice = int(input("Seleccione el número de terreno: ")) - 1
+                terreno = gestor.obtener_terreno(indice)
+                camino, _ = terreno.encontrar_ruta_optima()
+                matriz_visual = [['o' for _ in range(terreno.columnas)] for _ in range(terreno.filas)]
+                for i, j in camino:
+                    matriz_visual[i][j] = '1'
+                print("\nMapa del Camino (1 indica el recorrido):")
+                for fila in matriz_visual:
+                    print(fila)
+            except ValueError:
+                print("Por favor, ingrese un número válido.")
+            except IndexError:
+                print("Número de terreno no válido.")
         elif opcion == "6":
             print("Saliendo.......")
             break
