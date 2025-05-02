@@ -109,6 +109,12 @@ def generar_dot_matriz_con_camino(terreno, camino):
     except FileNotFoundError:
         print("Graphviz no está instalado o no se encontró el comando 'dot'.")
 
+    print(f"\nCoordenada inicial: ({terreno.inicio[0]+1},{terreno.inicio[1]+1})")
+    print(f"Coordenada final: ({terreno.fin[0]+1},{terreno.fin[1]+1})")
+    combustible_total = sum(terreno.matriz[x][y] for x, y in camino)
+    print(f"Combustible necesario: {combustible_total} unidades")
+
+
 class GestorTerrenos:
     def __init__(self):
         self.terrenos = []
