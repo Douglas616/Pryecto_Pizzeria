@@ -53,7 +53,7 @@ def generar_dot_matriz_con_camino(terreno, camino):
 
     dot = []
     dot.append("graph G {")
-    dot.append("    node [shape=box width=0.5];")
+    dot.append("    node [shape=ellipse, width=1.5, height=0.7, fixedsize=true, style=filled, fillcolor=orange];")
     dot.append("    splines=false;")
     dot.append("    nodesep=0.5;")
     dot.append("    ranksep=0.5;")
@@ -65,11 +65,11 @@ def generar_dot_matriz_con_camino(terreno, camino):
             valor = terreno.matriz[i][j]
             pos = f'"{i+1},{j+1}"'
             if (i, j) == terreno.inicio:
-                estilo = 'style=filled, fillcolor=green'
+                estilo = 'style=filled, fillcolor=darkolivegreen2'
             elif (i, j) == terreno.fin:
-                estilo = 'style=filled, fillcolor=red'
+                estilo = 'style=filled, fillcolor=crimson'
             elif (i, j) in camino:
-                estilo = 'style=filled, fillcolor=lightblue'
+                estilo = 'style=filled, fillcolor=cornflowerblue'
             else:
                 estilo = ''
             nodo = f'{pos} [label="{valor}" {"," + estilo if estilo else ""}]'
