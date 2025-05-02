@@ -5,6 +5,54 @@ import subprocess
 import tkinter as tk
 from tkinter import filedialog
 
+class Nodo:
+    def __init__(self, terreno):
+        self.terreno = terreno
+        self.siguiente = None
+
+class ListaSimple:
+    def __init__(self):
+        self.primero = None
+
+    def agregar(self, terreno):
+        nuevo = Nodo(terreno)
+        if not self.primero:
+            self.primero = nuevo
+        else:
+            actual = self.primero
+            while actual.siguiente:
+                actual = actual.siguiente
+            actual.siguiente = nuevo
+
+    def obtener(self, indice):
+        actual = self.primero
+        contador = 0
+        while actual:
+            if contador == indice:
+                return actual.terreno
+            actual = actual.siguiente
+            contador += 1
+        raise IndexError("Índice fuera de rango")
+
+    def mostrar(self):
+        actual = self.primero
+        contador = 1
+        while actual:
+            print(f'{contador}. {actual.terreno.nombre}')
+            actual = actual.siguiente
+            contador += 1
+
+    def longitud(self):
+        actual = self.primero
+        contador = 0
+        while actual:
+            contador += 1
+            actual = actual.siguiente
+        return contador
+
+    def __len__(self):
+        return self.longitud()
+
 class Terreno:
     def __init__(self, nombre, matriz, inicio, fin):
         self.nombre = nombre
@@ -24,9 +72,13 @@ class Terreno:
         distancias = {(i, j): float('inf') for i in range(self.filas) for j in range(self.columnas)}
         distancias[(inicio_x, inicio_y)] = self.matriz[inicio_x][inicio_y]
         padre = {}
+        visitado = set()
 
         while heap:
             costo, x, y = heapq.heappop(heap)
+            if (x, y) in visitado:
+                continue
+            visitado.add((x, y))
             if (x, y) == (fin_x, fin_y):
                 break
             for i in range(4):
@@ -38,6 +90,9 @@ class Terreno:
                         heapq.heappush(heap, (nuevo_costo, nx, ny))
                         padre[(nx, ny)] = (x, y)
 
+        if (fin_x, fin_y) not in padre:
+            return [], float('inf')
+
         camino = []
         actual = (fin_x, fin_y)
         while actual in padre:
@@ -46,7 +101,6 @@ class Terreno:
         camino.append((inicio_x, inicio_y))
         camino.reverse()
         return camino, distancias[(fin_x, fin_y)]
-
 def generar_dot_matriz_con_camino(terreno, camino):
     n = terreno.filas
     m = terreno.columnas
@@ -89,23 +143,23 @@ def generar_dot_matriz_con_camino(terreno, camino):
             dot.append(f'     {nodo};')
         dot.append("     { rank=same; " + "; ".join(fila_dot) + " }")
 
-    # Conexiones horizontales
+
     for i in range(1, n + 1):
         for j in range(1, m):
             dot.append(f'     "{i},{j}" -- "{i},{j+1}";')
 
-    # Conexiones verticales
+ 
     for i in range(1, n):
         for j in range(1, m + 1):
             dot.append(f'     "{i},{j}" -- "{i+1},{j}";')
 
-    # Camino resaltado
+
     for k in range(len(camino) - 1):
         i1, j1 = camino[k]
         i2, j2 = camino[k + 1]
         dot.append(f'     "{i1+1},{j1+1}" -- "{i2+1},{j2+1}" [color=blue, penwidth=2.5];')
 
-    # Centrar nodo info con fila del medio (aproximadamente)
+   
     fila_centro = (n // 2) + 1
     dot.append(f'     {{ rank=same; "{fila_centro},1"; info }}')
 
@@ -132,12 +186,11 @@ def generar_dot_matriz_con_camino(terreno, camino):
     print(f"\nCoordenada inicial: {inicio}")
     print(f"Coordenada final: {fin}")
     print(f"Combustible necesario: {costo_total} unidades")
-
-
+    
 class GestorTerrenos:
     def __init__(self):
-        self.terrenos = []
-        self.ruta_guardado_xml = "./salida_xml/" # Ruta por defecto para guardar los XML
+        self.terrenos = ListaSimple()
+        self.ruta_guardado_xml = "./salida_xml/"
         os.makedirs(self.ruta_guardado_xml, exist_ok=True)
 
     def cargar_xml(self, archivo):
@@ -154,39 +207,47 @@ class GestorTerrenos:
                 matriz[(x, y)] = valor
             filas = max(x for x, y in matriz.keys()) + 1
             columnas = max(y for x, y in matriz.keys()) + 1
+            if filas > 100 or columnas > 100:
+                print(f"Terreno '{nombre}' excede el tama\u00f1o m\u00e1ximo permitido de 100x100.")
+                continue
             matriz_ordenada = [[matriz.get((i, j), 0) for j in range(columnas)] for i in range(filas)]
-            self.terrenos.append(Terreno(nombre, matriz_ordenada, inicio, fin))
+            if not (0 <= inicio[0] < filas and 0 <= inicio[1] < columnas and 0 <= fin[0] < filas and 0 <= fin[1] < columnas):
+                print(f"Coordenadas fuera de rango para el terreno '{nombre}', se omitir\u00e1.")
+                continue
+            self.terrenos.agregar(Terreno(nombre, matriz_ordenada, inicio, fin))
 
     def mostrar_terrenos(self):
-        for i, terreno in enumerate(self.terrenos):
-            print(f'{i+1}. {terreno.nombre}')
+        self.terrenos.mostrar()
 
     def obtener_terreno(self, indice):
-        return self.terrenos[indice]
-    
+        return self.terrenos.obtener(indice)
+
     def procesar_terreno(self, indice_terreno):
         try:
             indice = int(indice_terreno) - 1
             if 0 <= indice < len(self.terrenos):
-                terreno = self.terrenos[indice]
+                terreno = self.obtener_terreno(indice)
                 print("- Calculando la mejor ruta")
                 camino, combustible = terreno.encontrar_ruta_optima()
+                if not camino:
+                    print("No hay ruta posible entre el inicio y el fin.")
+                    return False
                 print("- Calculando cantidad de combustible")
-                print(f"\nA Ruta óptima para el terreno '{terreno.nombre}':")
+                print(f"\nRuta \u00f3ptima para el terreno '{terreno.nombre}':")
                 ruta_str = " -> ".join(f"({x + 1}, {y + 1})" for x, y in camino)
                 print(ruta_str)
                 print(f"Combustible total necesario: {combustible} unidades.")
                 return True
             else:
-                print(f"Número de terreno '{indice_terreno}' no válido.")
+                print(f"N\u00famero de terreno '{indice_terreno}' no v\u00e1lido.")
                 return False
         except ValueError:
-            print(f"Entrada '{indice_terreno}' no válida. Por favor, ingrese un número.")
+            print(f"Entrada '{indice_terreno}' no v\u00e1lida. Por favor, ingrese un n\u00famero.")
             return False
-       
+
     def generar_archivo_salida_xml(self, indice_terreno, nombre_archivo, ruta_optima, combustible_total):
         if 0 <= indice_terreno < len(self.terrenos):
-            terreno = self.terrenos[indice_terreno]
+            terreno = self.obtener_terreno(indice_terreno)
             ruta_archivo = os.path.join(self.ruta_guardado_xml, f"{nombre_archivo}.xml")
 
             raiz = ET.Element("terreno")
@@ -217,24 +278,18 @@ class GestorTerrenos:
                 print(f"Archivo XML de salida generado exitosamente en: {ruta_archivo}")
 
                 if os.name == 'nt':
-                    try:
-                        subprocess.run(["notepad.exe", ruta_archivo], check=True)
-                    except FileNotFoundError:
-                        print("No se encontró 'notepad.exe'.")
+                    subprocess.run(["notepad.exe", ruta_archivo], check=True)
                 elif os.name == 'posix':
-                    try:
-                        subprocess.run(["xdg-open", ruta_archivo], check=True)
-                    except FileNotFoundError:
-                        print("No se encontró un visor de texto predeterminado.")
+                    subprocess.run(["xdg-open", ruta_archivo], check=True)
             except Exception as e:
                 print(f"Error al escribir el archivo XML: {e}")
         else:
-            print("Índice de terreno no válido.")
+            print("\u00cdndice de terreno no v\u00e1lido.")
 
 def menu():
     gestor = GestorTerrenos()
     while True:
-        print("\n\033[92m 🛰️  Bienvedidos al planedor de rutas para el satelite Quetzal01 🛰️\033[0m")
+        print("\n\033[92m 🚀  Bienvenidos al planeador de rutas para el satélite Quetzal01 🚀\033[0m")
         print("\n\033[38;5;214m__________________MENÚ PRINCIPAL__________________\033[0m")
         print("1. Cargar archivo")
         print("2. Mostrar terrenos disponibles")
@@ -243,7 +298,7 @@ def menu():
         print("5. Escribir archivo salida")
         print("6. Mapa del Camino")
         print("7. Datos del estudiante")
-        print("8. Salir de menu")
+        print("8. Salir del menú")
         opcion = input("Seleccione una opción: ")
 
         if opcion == "1":
@@ -255,15 +310,14 @@ def menu():
                 print("Archivo cargado con éxito.")
             else:
                 print("No se seleccionó ningún archivo.")
+
         elif opcion == "2":
             gestor.mostrar_terrenos()
 
         elif opcion == "3":
-
             gestor.mostrar_terrenos()
             indice_seleccionado = input("Seleccione el número de terreno a procesar: ")
             gestor.procesar_terreno(indice_seleccionado)
-
         elif opcion == "4":
             gestor.mostrar_terrenos()
             try:
@@ -289,6 +343,7 @@ def menu():
                     print("Número de terreno no válido.")
             except ValueError:
                 print("Por favor, ingrese un número válido.")
+
         elif opcion == "6":
             gestor.mostrar_terrenos()
             try:
@@ -300,22 +355,25 @@ def menu():
                     matriz_visual[i][j] = '1'
                 print("\nMapa del Camino (1 indica el recorrido):")
                 for fila in matriz_visual:
-                    print(fila)
+                    print(" ".join(fila))
             except ValueError:
                 print("Por favor, ingrese un número válido.")
             except IndexError:
                 print("Número de terreno no válido.")
+
         elif opcion == "7":
             print("\n\033[93m👨‍💻 Desarrollado por: Douglas Esaú Catú Otzoy 000140060 \033[0m")
             print("\n\033[93m📧 Contacto: stdcatuotz@upana.edu.gt \033[0m")
-            print("\n\033[93m Curso: Análisis y Diseño de Sistemas I\033[0m")
-            print("\n\033[93m Carrera: Ingeniería en Sistemas\033[0m")
+            print("\n\033[93m Asignatura: Análisis y Diseño de Sistemas I\033[0m")
+            print("\n\033[93m Carrera: Ingeniería en Sistemas y Tecnologías de la Información y la Comunicación\033[0m")
             print("\n\033[93m Semestre: Primer Semestre 2025\033[0m")
+
         elif opcion == "8":
-            print("\n\033[34m👋 Saliendo del Menu.........\033[0m")
+            print("\n\033[34m👋 Saliendo del Menú.........\033[0m")
             break
+
         else:
-            print("❌ Opción no válida.")
+            print("\u274c Opión no válida.")
 
 if __name__ == "__main__":
     menu()
