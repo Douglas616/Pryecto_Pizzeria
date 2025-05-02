@@ -51,12 +51,25 @@ def generar_dot_matriz_con_camino(terreno, camino):
     n = terreno.filas
     m = terreno.columnas
 
+    costo_total = sum(terreno.matriz[i][j] for i, j in camino)
+    inicio = (terreno.inicio[0] + 1, terreno.inicio[1] + 1)
+    fin = (terreno.fin[0] + 1, terreno.fin[1] + 1)
+
     dot = []
     dot.append("graph G {")
     dot.append("     node [shape=ellipse, width=1.5, height=0.7, fixedsize=true, style=filled, fillcolor=orange];")
     dot.append("     splines=false;")
     dot.append("     nodesep=0.5;")
     dot.append("     ranksep=0.5;")
+
+    dot.append(f'''     info [label=" RESUMEN\\n\\nInicio: {inicio}\\nFin: {fin}\\nCombustible total: {costo_total}", 
+         shape=box, 
+         style=filled, 
+         fillcolor=lightyellow, 
+         fontsize=16, 
+         width=4.0, 
+         height=2.2, 
+         fontname="Helvetica"];''')
 
     for i in range(n):
         fila_dot = []
@@ -76,18 +89,25 @@ def generar_dot_matriz_con_camino(terreno, camino):
             dot.append(f'     {nodo};')
         dot.append("     { rank=same; " + "; ".join(fila_dot) + " }")
 
+    # Conexiones horizontales
     for i in range(1, n + 1):
         for j in range(1, m):
             dot.append(f'     "{i},{j}" -- "{i},{j+1}";')
 
+    # Conexiones verticales
     for i in range(1, n):
         for j in range(1, m + 1):
             dot.append(f'     "{i},{j}" -- "{i+1},{j}";')
 
+    # Camino resaltado
     for k in range(len(camino) - 1):
         i1, j1 = camino[k]
         i2, j2 = camino[k + 1]
         dot.append(f'     "{i1+1},{j1+1}" -- "{i2+1},{j2+1}" [color=blue, penwidth=2.5];')
+
+    # Centrar nodo info con fila del medio (aproximadamente)
+    fila_centro = (n // 2) + 1
+    dot.append(f'     {{ rank=same; "{fila_centro},1"; info }}')
 
     dot.append("}")
 
@@ -109,10 +129,9 @@ def generar_dot_matriz_con_camino(terreno, camino):
     except FileNotFoundError:
         print("Graphviz no está instalado o no se encontró el comando 'dot'.")
 
-    print(f"\nCoordenada inicial: ({terreno.inicio[0]+1},{terreno.inicio[1]+1})")
-    print(f"Coordenada final: ({terreno.fin[0]+1},{terreno.fin[1]+1})")
-    combustible_total = sum(terreno.matriz[x][y] for x, y in camino)
-    print(f"Combustible necesario: {combustible_total} unidades")
+    print(f"\nCoordenada inicial: {inicio}")
+    print(f"Coordenada final: {fin}")
+    print(f"Combustible necesario: {costo_total} unidades")
 
 
 class GestorTerrenos:
@@ -144,7 +163,26 @@ class GestorTerrenos:
 
     def obtener_terreno(self, indice):
         return self.terrenos[indice]
-
+    
+    def procesar_terreno(self, indice_terreno):
+        try:
+            indice = int(indice_terreno) - 1
+            if 0 <= indice < len(self.terrenos):
+                terreno = self.terrenos[indice]
+                print("- Calculando la mejor ruta")
+                camino, combustible = terreno.encontrar_ruta_optima()
+                print("- Calculando cantidad de combustible")
+                print(f"\nA Ruta óptima para el terreno '{terreno.nombre}':")
+                ruta_str = " -> ".join(f"({x + 1}, {y + 1})" for x, y in camino)
+                print(ruta_str)
+                print(f"Combustible total necesario: {combustible} unidades.")
+                return True
+            else:
+                print(f"Número de terreno '{indice_terreno}' no válido.")
+                return False
+        except ValueError:
+            print(f"Entrada '{indice_terreno}' no válida. Por favor, ingrese un número.")
+            return False
        
     def generar_archivo_salida_xml(self, indice_terreno, nombre_archivo, ruta_optima, combustible_total):
         if 0 <= indice_terreno < len(self.terrenos):
@@ -196,13 +234,16 @@ class GestorTerrenos:
 def menu():
     gestor = GestorTerrenos()
     while True:
-        print("\n--- Menú Principal del Quetzal 🤖---")
-        print("1. Cargar archivo XML")
+        print("\n\033[92m 🛰️  Bienvedidos al planedor de rutas para el satelite Quetzal01 🛰️\033[0m")
+        print("\n\033[38;5;214m__________________MENÚ PRINCIPAL__________________\033[0m")
+        print("1. Cargar archivo")
         print("2. Mostrar terrenos disponibles")
-        print("3. Encontrar y graficar ruta óptima")
-        print("4. Generar archivo salida xml")
-        print("5. Mapa del Camino")
-        print("6. Salir de menu")
+        print("3. Procesar terrenos disponibles")
+        print("4. Graficar ruta óptima")
+        print("5. Escribir archivo salida")
+        print("6. Mapa del Camino")
+        print("7. Datos del estudiante")
+        print("8. Salir de menu")
         opcion = input("Seleccione una opción: ")
 
         if opcion == "1":
@@ -216,7 +257,14 @@ def menu():
                 print("No se seleccionó ningún archivo.")
         elif opcion == "2":
             gestor.mostrar_terrenos()
+
         elif opcion == "3":
+
+            gestor.mostrar_terrenos()
+            indice_seleccionado = input("Seleccione el número de terreno a procesar: ")
+            gestor.procesar_terreno(indice_seleccionado)
+
+        elif opcion == "4":
             gestor.mostrar_terrenos()
             try:
                 indice = int(input("Seleccione el número de terreno: ")) - 1
@@ -228,7 +276,7 @@ def menu():
                 print("Por favor, ingrese un número válido.")
             except IndexError:
                 print("Número de terreno no válido.")
-        elif opcion == "4":
+        elif opcion == "5":
             gestor.mostrar_terrenos()
             try:
                 indice_terreno = int(input("Seleccione el número de terreno para generar el archivo XML: ")) - 1
@@ -241,7 +289,7 @@ def menu():
                     print("Número de terreno no válido.")
             except ValueError:
                 print("Por favor, ingrese un número válido.")
-        elif opcion == "5":
+        elif opcion == "6":
             gestor.mostrar_terrenos()
             try:
                 indice = int(input("Seleccione el número de terreno: ")) - 1
@@ -257,11 +305,17 @@ def menu():
                 print("Por favor, ingrese un número válido.")
             except IndexError:
                 print("Número de terreno no válido.")
-        elif opcion == "6":
-            print("Saliendo.......")
+        elif opcion == "7":
+            print("\n\033[93m👨‍💻 Desarrollado por: Douglas Esaú Catú Otzoy 000140060 \033[0m")
+            print("\n\033[93m📧 Contacto: stdcatuotz@upana.edu.gt \033[0m")
+            print("\n\033[93m Curso: Análisis y Diseño de Sistemas I\033[0m")
+            print("\n\033[93m Carrera: Ingeniería en Sistemas\033[0m")
+            print("\n\033[93m Semestre: Primer Semestre 2025\033[0m")
+        elif opcion == "8":
+            print("\n\033[34m👋 Saliendo del Menu.........\033[0m")
             break
         else:
-            print("Opción no válida.")
+            print("❌ Opción no válida.")
 
 if __name__ == "__main__":
     menu()
